@@ -17,7 +17,6 @@ export default function useAudioLevels() {
         console.warn('Permission to access microphone is required!');
         return;
       }
-
       await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
 
       const recordingObject = new Audio.Recording();
@@ -29,7 +28,9 @@ export default function useAudioLevels() {
       const interval = setInterval(async () => {
         const status = await recordingObject.getStatusAsync();
         if (status.metering) {
-          setDecibels(status.metering); // Audio level in dBFS (decibels relative to full scale)
+          // Normalize the value from -160 to 0 dB to 0 to 120 dB
+          const normalized = ((status.metering + 160) / 160) * 120;
+          setNormalizedDecibels(normalized);
         }
       }, 500);
 
