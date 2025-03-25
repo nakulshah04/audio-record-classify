@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Button, Text, StyleSheet } from 'react-native';
 import { Audio } from 'expo-av';
+import { processAudioWithYAMNet } from './yamnet_processor';  // Import the new function
 
 export default function AudioRecorder() {
   const [recording, setRecording] = useState(null);
@@ -8,6 +9,7 @@ export default function AudioRecorder() {
   const [isRecording, setIsRecording] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [normalizedDecibels, setNormalizedDecibels] = useState(null);
+  const [isFFmpegLoaded, setIsFFmpegLoaded] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -15,24 +17,22 @@ export default function AudioRecorder() {
         recording.stopAndUnloadAsync();
       }
     };
-  }, []);
+  }, [recording]);
 
   async function startRecording() {
     try {
-        if (recording) {
-            await recording.stopAndUnloadAsync();
-          }
-        console.log('Requesting permissions..');
-        await Audio.requestPermissionsAsync();
-        await Audio.setAudioModeAsync({
-            allowsRecordingIOS: true,
-            playsInSilentModeIOS: true,
+      if (recording) {
+        await recording.stopAndUnloadAsync();
+      }
+      console.log('Requesting permissions..');
+      await Audio.requestPermissionsAsync();
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
       });
 
       console.log('Starting recording..');
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RECORDING_OPTIONS_PRESET_HIGH_QUALITY
-      );
+      const { recording } = await Audio.Recording.createAsync(recordingSettings);
       setRecording(recording);
       setIsRecording(true);
 
@@ -56,9 +56,38 @@ export default function AudioRecorder() {
     setIsRecording(false);
     await recording.stopAndUnloadAsync();
     const uri = recording.getURI();
+    console.log("Recording saved at:", uri);
+
     setRecording(null);
     setSound({ uri });
+
+    // Process the recorded audio with YAMNet
+    const result = await processAudioWithYAMNet(uri);
+    console.log('YAMNet processing result:', result);
   }
+
+  const recordingSettings = {
+    isMeteringEnabled: true,
+    android: {
+      extension: '.wav',
+      outputFormat: Audio.RECORDING_OPTION_ANDROID_OUTPUT_FORMAT_PCM_16BIT,
+      audioEncoder: Audio.RECORDING_OPTION_ANDROID_AUDIO_ENCODER_PCM_16BIT,
+      sampleRate: 16000, // YAMNet-compatible
+      numberOfChannels: 1, // Mono
+      bitRate: 256000, 
+    },
+    ios: {
+      extension: '.wav',
+      outputFormat: Audio.RECORDING_OPTION_IOS_OUTPUT_FORMAT_LINEARPCM,
+      audioQuality: Audio.RECORDING_OPTION_IOS_AUDIO_QUALITY_HIGH,
+      sampleRate: 16000, // YAMNet-compatible
+      numberOfChannels: 1, // Mono
+      bitRate: 256000,
+      linearPCMBitDepth: 16,
+      linearPCMIsBigEndian: false,
+      linearPCMIsFloat: false,
+    }
+  };
 
   async function playSound() {
     console.log('Playing Sound');

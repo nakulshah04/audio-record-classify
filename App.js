@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import AudioRecorder from './sensors/AudioRecorder'
+import AudioRecorder from './sensors/audio_playback'
 
 export default function App() {
   return (
