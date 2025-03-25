@@ -1,4 +1,3 @@
-# audio-testing
-
-Testing expo-av with respect to recording decibel levels and audio playback
-Implementing YAMnet for audio classification
+* Testing expo-av for recording decibel levels
+* Playing back the audio after storing it locally, on the mobile phone
+* Implementing YAMnet for audio classification on the recorded audio to get environmental cues
