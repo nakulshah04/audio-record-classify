@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Button, Text, StyleSheet } from 'react-native';
 import { Audio } from 'expo-av';
-import { processAudioWithYAMNet } from './yamnet_processor';  // Import the new function
+import { processAudioWithYAMNet } from './yamnet_processor';
+import debounce from 'lodash.debounce';
 
 export default function AudioRecorder() {
   const [recording, setRecording] = useState(null);
@@ -51,19 +52,22 @@ export default function AudioRecorder() {
     }
   }
 
+  const debouncedProcessAudio = debounce(async (uri) => {
+    const result = await processAudioWithYAMNet(uri);
+    console.log('YAMNet processing result:', result);
+  }, 300);
+
   async function stopRecording() {
     console.log('Stopping recording..');
     setIsRecording(false);
     await recording.stopAndUnloadAsync();
     const uri = recording.getURI();
     console.log("Recording saved at:", uri);
-
+  
     setRecording(null);
     setSound({ uri });
-
-    // Process the recorded audio with YAMNet
-    const result = await processAudioWithYAMNet(uri);
-    console.log('YAMNet processing result:', result);
+  
+    debouncedProcessAudio(uri); // Use debounced function
   }
 
   const recordingSettings = {
