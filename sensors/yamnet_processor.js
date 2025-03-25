@@ -1,15 +1,21 @@
 import Tflite from 'tflite-react-native';
-import { decode } from 'wav-decoder'; // Add wav-decoder for audio preprocessing
+import { decode } from 'wav-decoder';
 
-const modelPath = './assets/yamnet.tflite'; // Ensure this file is correctly placed
+const modelPath = './assets/yamnet.tflite';
 
-let tfliteModel = new Tflite(); // Create a new instance of Tflite
+let tfliteModel = null; // Initialize as null
 
-async function loadModel() {
+export async function loadModel() {
   try {
+    if (!tfliteModel) {
+      console.log('Initializing TFLite model instance...');
+      tfliteModel = new Tflite(); // Create the instance only once
+    }
+
+    console.log('Attempting to load YAMNet model...');
     await tfliteModel.loadModel({
       model: modelPath,
-      modelType: 'TFLITE',
+      modelType: 'FLOAT32',
     });
     console.log('YAMNet model loaded successfully');
   } catch (error) {
@@ -22,9 +28,9 @@ async function preprocessAudio(audioPath) {
     const response = await fetch(audioPath);
     const arrayBuffer = await response.arrayBuffer();
     const decoded = await decode(arrayBuffer);
-    
-    // Convert decoded audio data to a tensor (Float32Array in this case)
-    const audioTensor = new Float32Array(decoded.channelData[0]); // Mono channel data
+
+    // Normalize audio data between -1 and 1
+    const audioTensor = new Float32Array(decoded.channelData[0].map(sample => sample / Math.max(...decoded.channelData[0])));
     return audioTensor;
   } catch (error) {
     console.error('Error during audio preprocessing:', error);
@@ -34,20 +40,19 @@ async function preprocessAudio(audioPath) {
 
 export async function processAudioWithYAMNet(audioPath) {
   try {
+    console.log('Starting YAMNet processing...');
     if (!tfliteModel) {
-      console.log('Model not loaded, loading...');
+      console.log('Loading model...');
       await loadModel();
     }
 
+    console.log('Preprocessing audio...');
     const audioTensor = await preprocessAudio(audioPath);
-    if (!audioTensor) {
-      throw new Error('Failed to preprocess audio');
-    }
 
-    // Run inference
-    const result = await tfliteModel.runForMultipleInputsOutputs([audioTensor]);
+    console.log('Running inference...');
+    const result = await tfliteModel.runModelOnBinary({ input: audioTensor });
 
-    console.log('YAMNet Inference Result:', result);
+    console.log('Inference complete:', result);
     return result;
   } catch (error) {
     console.error('YAMNet processing error:', error);
