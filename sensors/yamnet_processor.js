@@ -1,39 +1,58 @@
 import Tflite from 'tflite-react-native';
-import { decode } from 'wav-decoder';
 
+let tflite = null;
+let isModelLoaded = false;
 const modelPath = './assets/yamnet.tflite';
 
-let tfliteModel = null; // Initialize as null
-
-export async function loadModel() {
-  try {
-    if (!tfliteModel) {
-      console.log('Initializing TFLite model instance...');
-      tfliteModel = new Tflite(); // Create the instance only once
+async function initializeTFLite() {
+    try {
+      console.log('Initializing TFLite...');
+      if (!tflite) {
+        tflite = new Tflite();
+        console.log('TFLite instance created successfully:', tflite);
+      } else {
+        console.log('TFLite instance already exists.');
+      }
+    } catch (error) {
+      console.error('Error initializing TFLite:', error);
     }
-
-    console.log('Attempting to load YAMNet model...');
-    await tfliteModel.loadModel({
-      model: modelPath,
-      modelType: 'FLOAT32',
-    });
-    console.log('YAMNet model loaded successfully');
-  } catch (error) {
-    console.error('Failed to load YAMNet model:', error);
   }
+
+  export async function loadModel() {
+    try {
+      console.log('Preloading YAMNet model...');
+      await initializeTFLite(); // Ensure TFLite is initialized
+  
+      if (!tflite) {
+        throw new Error('TFLite instance is null');
+      }
+  
+      console.log('Loading YAMNet model...');
+      await tflite.loadModel(
+        { model: modelPath, numThreads: 1 },
+        (error) => {
+          if (error) {
+            console.error('Failed to load YAMNet model:', error);
+          } else {
+            console.log('YAMNet model loaded successfully');
+          }
+        }
+      );
+    } catch (error) {
+      console.error('Error in loadModel():', error);
+    }
 }
 
 async function preprocessAudio(audioPath) {
   try {
+    console.log('Fetching audio as raw data...');
     const response = await fetch(audioPath);
     const arrayBuffer = await response.arrayBuffer();
-    const decoded = await decode(arrayBuffer);
-
-    // Normalize audio data between -1 and 1
-    const audioTensor = new Float32Array(decoded.channelData[0].map(sample => sample / Math.max(...decoded.channelData[0])));
+    // Convert the raw audio data into a tensor
+    const audioTensor = new Float32Array(arrayBuffer);
     return audioTensor;
   } catch (error) {
-    console.error('Error during audio preprocessing:', error);
+    console.error('Error fetching audio:', error);
     return null;
   }
 }
@@ -41,28 +60,44 @@ async function preprocessAudio(audioPath) {
 export async function processAudioWithYAMNet(audioPath) {
   try {
     console.log('Starting YAMNet processing...');
-    if (!tfliteModel) {
-      console.log('Loading model...');
+
+    // Load the model if it’s not loaded already
+    if (!isModelLoaded) {
       await loadModel();
     }
 
-    console.log('Preprocessing audio...');
     const audioTensor = await preprocessAudio(audioPath);
+    if (!audioTensor) throw new Error('Failed to preprocess audio');
 
     console.log('Running inference...');
-    const result = await tfliteModel.runModelOnBinary({ input: audioTensor });
+    const waveformInputIndex = 0; // Assuming input index for waveform
+    await tflite.setTensor(waveformInputIndex, audioTensor); // Set the tensor input
 
-    console.log('Inference complete:', result);
-    return result;
+    await tflite.allocateTensors(); // Allocate tensors for model inference
+
+    const scoresOutputIndex = 0; // Assuming output index for scores
+    const scores = await tflite.getTensor(scoresOutputIndex); // Get the output tensor (scores)
+
+    console.log('Inference result:', scores);
+
+    // Find the top class (like Python's argmax on scores)
+    const topClassIndex = scores.indexOf(Math.max(...scores));
+    console.log('Top class index:', topClassIndex);
+
+    return topClassIndex;
   } catch (error) {
     console.error('YAMNet processing error:', error);
-    return null;
   }
 }
 
 export async function unloadModel() {
-  if (tfliteModel) {
-    await tfliteModel.close();
-    console.log('YAMNet model unloaded successfully');
+  try {
+    if (tflite) {
+      await tflite.close();
+      console.log('YAMNet model unloaded successfully');
+      tflite = null;
+    }
+  } catch (error) {
+    console.error('Failed to unload model:', error);
   }
 }
